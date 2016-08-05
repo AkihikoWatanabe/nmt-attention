@@ -1,14 +1,6 @@
 # coding=utf-8
 
-import numpy as np
-from chainer import cuda, Variable, optimizers, serializers, utils, gradient_check
-from chainer import Link, Chain, ChainList
-import chainer.linksa as L
-import chainer.functions as F
 import argparse
-from utils.vocab import Vocab
-
-
 
 def parse_args():
     # each default parameter is according to the settings of original paper.
@@ -45,6 +37,11 @@ def parse_args():
             "--test",
             action="store_true",
             help="if set this option, decoding on the test data will be conducted using trained models."
+            )
+    p.add_argument(
+            "--use_gpu",
+            action="store_true",
+            help="using gpu for calculation"
             )
     p.add_argument(
             "-epochs",
