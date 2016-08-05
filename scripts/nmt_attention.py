@@ -8,6 +8,8 @@ import chainer.functions as F
 import argparse
 from utils.vocab import Vocab
 
+
+
 def parse_args():
     # each default parameter is according to the settings of original paper.
     DEF_EPOCHS = 10
@@ -33,6 +35,16 @@ def parse_args():
             "model_path",
             type=str,
             help="path_to_model/ This directory will use save/load model files in training/testing."
+            )
+    p.add_argument(
+            "--train",
+            action="store_true",
+            help="if set this option, the network will be trained and generate model files."
+    )
+    p.add_argument(
+            "--test",
+            action="store_true",
+            help="if set this option, decoding on the test data will be conducted using trained models."
             )
     p.add_argument(
             "-epochs",
