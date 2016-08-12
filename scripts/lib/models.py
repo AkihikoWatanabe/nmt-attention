@@ -21,16 +21,19 @@ class LSTMEncoder(Chain):
         c, h = F.lstm(c, self.eh(e)+self.hh(h))
         return c, h
 
-class BiDirectionalLSTMEncoder(Chain):
+class Attention(Chain):
     """ This class encodes inputs as embedding bidirectionally.
         See the paper Appendix A.2.1 for more details.
         This implementation uses LSTM as gated hidden unit instead of GRU.
     """
     def __init__(self, vocab_size, hidden_size, embed_size, vocab):
         super(BiDirectionalLSTMEncoder, self).__init__(
+            # Bi-directional LSTM Encoder
             xe = L.EmbedID(vocab_size, embed_size),
             fenc = LSTMEncoder(vocab_size, hidden_size, embed_size),
             benc = LSTMEncoder(vocab_size, hidden_size, embed_size),
+            # Alignment model
+            align = Alignment(hidden_size)
         )
         self.vocab = vocab
         
@@ -75,11 +78,24 @@ class Alignment(Chain):
 
 class Decoder(Chain):
 
-    def __init__(self, vocab_size, hidden_size, embed_size):
+    def __init__(self, vocab_size, hidden_size, maxout_hidden_size, embed_size, pool_size=2):
         super(Decoder, self).__init__(
             ye = L.EmbedID(vocab_size, embed_size),
             eh = L.Linear(embed_size, 4*hidden_size),
-            cc = L.Linear(2*hidden_size, 4*hidden_size),
-
+            ch = L.Linear(2*hidden_size, 4*hidden_size),
+            hh = L.Linear(hidden_size, 4*hidden_size),
+            # single maxout hidden layer
+            sm = L.Linear(hidden_size, 2*maxout_hidden_size),
+            em = L.Linear(embed_size, pool_size**maxout_hidden_size),
+            cm = L.Linear(2*hidden_size, pool_size*maxout_hidden_size),
+            my = L.Linear(maxout_hidden_size, vocab_size),
         )
+        self.POOL_SIZE = 2
 
+    def __call__(self, y, cv, c, h):
+        e = self.ye(y)
+        t = F.maxout(self.sm(h)+self.em(y)+self.cm(cv), self.POOL_SIZE)
+        y = self.my(t)
+        c, h = F.lstm(c, self.eh(e)+self.hh(h)+self.ch(cv))
+
+        return y, c, h
