@@ -97,7 +97,32 @@ def train(args):
     target_vocab.save(args.model_path+TAR_VOCAB_NAME)
 
 def test(args):
-    source_vocab = Vocab.load()
+    source_vocab = Vocab.load(args.model_path+SRC_VOCAB_NAME)
+    target_vocab= Vocab.load(args.model_path+TAR_VOCAB_NAME) 
+    vocab_size, hidden_size, maxout_hidden_size, embed_size = Backup.load(args.model_path+HPARAM_NAME)
+
+    att_encdec = ABED(vocab_size, hidden_size, maxout_hidden_size, embed_size)
+    if args.use_gpu:
+        att_encdec.to_gpu()
+    serializers.load_hdf5(args.model_path+str(args.epochs)+'.attencdec', att_encdec)
+
+    with open(args.output+str(args.epochs), 'w') as fp:
+        source_gen = word_list(args.source)
+        target_gen = word_list(args.target)
+        batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch) 
+        for source_batch, target_batch in batch_gen: 
+            source_batch = fill_batch(source_batch)
+            target_batch = fill_batch(target_batch) 
+            hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
+            for i, hyp in enumerate(hyp_batch):
+                hyp = hyp[:hyp.index(END)]
+                print '--------------------'
+                print 'source: %s'%' '.join(source_batch[i])
+                fp.write('source: %s\n'%' '.join(source_batch[i]) )
+                print 'target: %s'%' '.join(target_batch[i])
+                fp.write('target: %s\n'%' '.join(target_batch[i]) ) 
+                print 'hyp: %s'%' '.join(hyp)
+                fp.write('hyp: %s'%' '.join(hyp))
 
 def parse_args():
     # each default parameter is according to the settings of original paper.
@@ -108,7 +133,9 @@ def parse_args():
     DEF_MAXOUT_HIDDEN = 500
     DEF_VOCAB = 30000
     DEF_EPS = 1e-06
-    DFE_RHO = 0.95
+    DEF_RHO = 0.95
+    DEF_OUTPUT = "./hyp"
+    DEF_LIMIT = 50
 
     p = argparse.ArgumentParser(
         description = "A Neural Attention Model for Machine Translation"
@@ -127,6 +154,12 @@ def parse_args():
             "model_path",
             type=str,
             help="path_to_model/ This directory will use save/load model files in training/testing."
+            )
+    p.add_argument(
+            "-output",
+            type=str,
+            default=DEF_OUTPUT,
+            help="path_to_output_file"
             )
     p.add_argument(
             "--train",
@@ -190,6 +223,12 @@ def parse_args():
             type=int,
             default=DEF_EPS,
             help="epsilon of AdaDelta"
+            )
+    p.add_argument(
+            "-limit",
+            type=int,
+            default=DEF_LIMIT,
+            help="maximum number of words of output"
             )
     args = p.parse_args()
 
