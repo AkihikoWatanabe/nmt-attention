@@ -1,13 +1,15 @@
 # coding=utf-8
 
 import argparse
+from chainer import cuda, serializers, optimizers
+import chainer.functions as F 
 from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
 from lib.constants import BEGIN, END
-import lib.XP
-from chainer import serializers
+from lib.functions import fill_batch
+from lib.XP import XP
 
 HPARAM_NAME = "hyper_params"
 TAR_VOCAB_NAME = "tarvocab"
@@ -82,7 +84,7 @@ def train(args):
             n += len(source_batch)
             source_batch = fill_batch(source_batch)
             target_batch = fill_batch(target_batch)
-            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, is_train=True, 0)
+            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0)
 
             loss.backward()
             opt.weight_decay(0.001)
@@ -90,12 +92,12 @@ def train(args):
         prefix = args.model_path + '%s'%(epoch+1)
         serializers.save_hdf5(prefix+'.attencdec', att_encdec)
     hyp_params = att_encdec.get_hyper_params()
-    Backup.dump(args.model_path+HPARAM_NAME)
+    Backup.dump(hyp_params, args.model_path+HPARAM_NAME)
     source_vocab.save(args.model_path+SRC_VOCAB_NAME)
     target_vocab.save(args.model_path+TAR_VOCAB_NAME)
 
 def test(args):
-    
+    source_vocab = Vocab.load()
 
 def parse_args():
     # each default parameter is according to the settings of original paper.
