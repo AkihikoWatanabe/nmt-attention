@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import argparse
+from lib.backup import Backup
 
 def parse_args():
     # each default parameter is according to the settings of original paper.
