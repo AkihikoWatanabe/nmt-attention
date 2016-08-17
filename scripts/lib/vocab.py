@@ -14,8 +14,9 @@ class Vocab():
             for s, i in self.__s2i.items():
                 fp.write('%s	%s\n'%(s, i))
     
-    # TODO: static methodにする
+    @staticmethod
     def load(self, filepath):
+        self = Vocab(None, None)
         with open(filepath) as fp:
             self.__file_path = next(fp).strip()
             self.__vocab_size = int(next(fp))
@@ -32,6 +33,7 @@ class Vocab():
                 if s:
                     self.__s2i[s] = i
                     self.__i2s[i] = s
+        return self
 
     def set_num_lines(self, num_lines):
         self.__num_lines = num_lines
