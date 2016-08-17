@@ -5,13 +5,64 @@ from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
+from lib.constants import BEGIN, END
+import lib.XP
 from chainer import serializers
 
 HPARAM_NAME = "hyper_params"
-TRG_VOCAB_NAME = "trgvocab"
+TAR_VOCAB_NAME = "tarvocab"
 SRC_VOCAB_NAME = "srcvocab"
 
-def forward():
+def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit):
+    batch_size = len(src_batch)
+    src_len = len(src_batch[0])
+    tar_len = len(tar_batch[0]) if tar_batch!=None else 0
+    encdec.reset(batch_size)
+
+    # forward encoding
+    x = XP.iarray([src_vocab.s2i(BEGIN) for _ in range(batch_size)])
+    encdec.fencode(x)
+    for l in range(src_len):
+        x = XP.iarray([src_vocab.s2i(src_batch[k][l]) for k in range(batch_size)]) 
+        encdec.fencode(x)
+    x = XP.iarray([src_vocab.s2i(END) for _ in range(batch_size)])
+    encdec.fencode(x) 
+
+    # backward encoding
+    x = XP.iarray([src_vocab.s2i(END) for _ in range(batch_size)])
+    encdec.bencode(x)
+    for l in reversed(range(src_len)):
+        x = XP.iarray([src_vocab.s2i(src_batch[k][l]) for k in range(batch_size)]) 
+        encdec.bencode(x)
+    x = XP.iarray([src_vocab.s2i(BEGIN) for _ in range(batch_size)])
+    encdec.bencode(x)  
+
+    # initialize states of the decoder
+    encdec.init_decode()
+
+    # decoding
+    t = XP.iarray([tar_vocab.s2i(BEGIN) for _ in range(batch_size)]) 
+    hyp_batch = [[] for _ in range(batch_size)]
+
+    if is_train:
+        loss = XP.zeros(())
+        for l in range(tar_len):
+            y = encdec.decode(t, batch_size)
+            t = XP.iarray([tar_vocab.s2i(tar_batch[k][l]) for k in xrange(batch_size)])
+            loss += F.softmax_cross_entropy(y, t)
+            output = cuda.to_cpu(y.data.argmax(1))
+            for k in range(batch_size):
+                hyp_batch[k].append(tar_vocab.i2s(output[k]))
+        return hyp_batch, loss
+    else:
+        while len(hyp_batch[0])<limit:
+            y = encdec.decode(t, batch_size)
+            output = cuda.to_cpu(y.data.argmax(1))
+            for k in range(batch_size):
+                hyp_batch[k].append(tar_vocab.i2s(output[k]))
+            if all(hyp_batch[k][-1]==END for k in xrange(batch_size)):
+                break
+        return hyp_batch
 
 def train(args):
     source_vocab = Vocab(args.source, args.vocab)
@@ -29,10 +80,10 @@ def train(args):
         n = 0
         for source_batch, target_batch in batch_gen:
             n += len(source_batch)
-            source_batch = fill_batch_end(source_batch)
-            target_batch = fill_batch_end(target_batch)
-            hyp_batch, loss = forward()
-            
+            source_batch = fill_batch(source_batch)
+            target_batch = fill_batch(target_batch)
+            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, is_train=True, 0)
+
             loss.backward()
             opt.weight_decay(0.001)
             opt.update()
@@ -41,7 +92,7 @@ def train(args):
     hyp_params = att_encdec.get_hyper_params()
     Backup.dump(args.model_path+HPARAM_NAME)
     source_vocab.save(args.model_path+SRC_VOCAB_NAME)
-    target_vocab.save(args.model_path+TRG_VOCAB_NAME)
+    target_vocab.save(args.model_path+TAR_VOCAB_NAME)
 
 def test(args):
     
