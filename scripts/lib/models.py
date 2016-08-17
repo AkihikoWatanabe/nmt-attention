@@ -90,11 +90,11 @@ class Decoder(Chain):
 
         return y, c, h 
 
-class AttentionalEncoderDecoder(Chain):
+class AttentionBasedEncoderDecoder(Chain):
     """ This class controlls whole models on Attentional MT (Encoder, Decoder, Attention).
     """
-    def __init__(self, vocab_size, hidden_size, maxout_hidden_size, embed_size, vocab):
-        super(AttentionalEncoderDecoder, self).__init__(
+    def __init__(self, vocab_size, hidden_size, maxout_hidden_size, embed_size):
+        super(AttentionBasedEncoderDecoder, self).__init__(
             # Bi-directional LSTM Encoder
             xe = L.EmbedID(vocab_size, embed_size),
             hs = L.Linear(hidden_size, hidden_size),
@@ -105,7 +105,6 @@ class AttentionalEncoderDecoder(Chain):
             # Decoder
             dec = Decoder(vocab_size, hidden_size, maxout_hidden_size, embed_size)
         )
-        self.vocab = vocab
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.maxout_hidden_size = maxout_hidden_size
@@ -115,9 +114,9 @@ class AttentionalEncoderDecoder(Chain):
 
     def get_hyper_params(self):
         """ @return:
-                [list of hyperparamters]: contains vocabulary, vocabulary size, # of hidden unit, # of maxout hidden unit and size of embedding
+                [list of hyperparamters]: contains vocabulary size, # of hidden unit, # of maxout hidden unit and size of embedding
         """
-        return [self.vocab, self.vocab_size, self.hidden_size, \
+        return [self.vocab_size, self.hidden_size, \
                 self.maxout_hidden_size, self.embed_size]
 
     def reset(self, batch_size):

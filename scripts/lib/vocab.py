@@ -1,11 +1,38 @@
 # coding=utf-8
 
 from collections import defaultdict
+from constants import UNK, BEGIN, END, PAD
 
 class Vocab():
-    def __init__(self, file_path, vocab_size):
+    def __init__(self, file_path, vocab_size, make=True):
         self.__file_path = file_path
         self.__vocab_size = vocab_size
+
+        if make:
+            word_freq = defaultdict(lambda: 0)
+            self.__num_lines = 0 
+            self.__num_words = 0
+            with open(self.__file_path) as fp:
+                for line in fp:
+                    words = line.split()
+                    self.__num_lines += 1
+                    self.__num_words += len(words)
+                    for word in words:
+                        word_freq[word] += 1
+            # 0:<unk>  1:<s>  2:</s> 3:<pad>
+            self.__s2i = defaultdict(lambda: len(self.__s2i)+4)
+            [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[self.__vocab_size]]
+            self.__s2i[UNK]= 0
+            self.__s2i[BEGIN] = 1
+            self.__s2i[END] = 2
+            self.__s2i[PAD] = 3
+            self.__i2s = ['']*self.__vocab_size
+            self.__i2s[0] = UNK
+            self.__i2s[1] = BEGIN
+            self.__i2s[2] = END
+            self.__i2s[3] = PAD
+            for s, i in self.__s2i.items():
+                self.__i2s[i] = s
 
     def save(self, filepath):
         with open(filepath, "w") as fp:
@@ -16,7 +43,7 @@ class Vocab():
     
     @staticmethod
     def load(self, filepath):
-        self = Vocab(None, None)
+        self = Vocab(None, None, make=False)
         with open(filepath) as fp:
             self.__file_path = next(fp).strip()
             self.__vocab_size = int(next(fp))
@@ -57,34 +84,10 @@ class Vocab():
         try:
             return self.__s2i[surface]
         except KeyError:
-            return self.__s2i['<unk>'] # 0
+            return self.__s2i[UNK] # 0
         
     def i2s(self, word_id):
         try:
             return self.__i2s[word_id]
         except KeyError:
             return self.__i2s[0] # <unk>
-
-    def make_vocab(self):
-        word_freq = defaultdict(lambda: 0)
-        self.__num_lines = 0 
-        self.__num_words = 0
-        with open(self.__file_path) as fp:
-            for line in fp:
-                words = line.split()
-                self.__num_lines += 1
-                self.__num_words += len(words)
-                for word in words:
-                    word_freq[word] += 1
-        # 0:<unk>  1:<s>  2:</s>
-        self.__s2i = defaultdict(lambda: len(self.__s2i)+3)
-        [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])]
-        self.__s2i['<unk>'] = 0
-        self.__s2i['<s>'] = 1
-        self.__s2i['</s>'] = 2
-        self.__i2s = ['']*self.__vocab_size
-        self.__i2s[0] = '<unk>'
-        self.__i2s[1] = '<s>'
-        self.__i2s[2] = '</s>'
-        for s, i in self.__s2i.items():
-            self.__i2s[i] = s

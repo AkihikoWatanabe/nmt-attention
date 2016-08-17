@@ -8,8 +8,8 @@ class XP:
     __int = None
 
     @staticmethod
-    def set_library(args):
-        if args.use_gpu:
+    def set_library(use_gpu):
+        if use_gpu:
             XP.__lib = cuda.cupy
         else:
             XP.__lib = np
