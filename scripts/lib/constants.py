@@ -5,3 +5,4 @@ UNK = '<unk>'
 BEGIN = '<s>'
 END = '</s>'
 PAD = '<pad>'
+PAD_IDX = 3

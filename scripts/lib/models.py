@@ -4,6 +4,7 @@ from chainer import Chain
 import chainer.links as L
 import chainer.functions as F
 from lib.XP import XP
+from constants import PAD_IDX
 
 class LSTMEncoder(Chain):
     """ This class encodes the input characters as fixed-length vector
@@ -60,7 +61,7 @@ class Decoder(Chain):
     """                                                        
     def __init__(self, vocab_size, hidden_size, maxout_hidden_size, embed_size, pool_size=2):
         super(Decoder, self).__init__(
-            ye = L.EmbedID(vocab_size, embed_size),
+            ye = L.EmbedID(vocab_size, embed_size, ignore_label=PAD_IDX),
             eh = L.Linear(embed_size, 4*hidden_size),
             ch = L.Linear(2*hidden_size, 4*hidden_size),
             hh = L.Linear(hidden_size, 4*hidden_size),
@@ -96,7 +97,7 @@ class AttentionBasedEncoderDecoder(Chain):
     def __init__(self, vocab_size, hidden_size, maxout_hidden_size, embed_size):
         super(AttentionBasedEncoderDecoder, self).__init__(
             # Bi-directional LSTM Encoder
-            xe = L.EmbedID(vocab_size, embed_size),
+            xe = L.EmbedID(vocab_size, embed_size, ignore_label=PAD_IDX),
             hs = L.Linear(hidden_size, hidden_size),
             fenc = LSTMEncoder(vocab_size, hidden_size, embed_size),
             benc = LSTMEncoder(vocab_size, hidden_size, embed_size),
