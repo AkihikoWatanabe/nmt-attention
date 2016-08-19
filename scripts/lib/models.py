@@ -144,7 +144,7 @@ class AttentionBasedEncoderDecoder(Chain):
         e = self.xe(x)
         self.fc, self.fh = self.fenc(e, self.fc, self.fh)
         self.sentence_length += 1
-        self.fstates[self.fh]
+        self.fstates.append(self.fh)
 
     def bencode(self, x):
         """ Conduct backward encoding.
@@ -154,7 +154,7 @@ class AttentionBasedEncoderDecoder(Chain):
         e = self.xe(x)
         self.bc, self.bh = self.benc(e, self.bc, self.bh)
         self.sentence_length += 1
-        self.bstates[self.bh] 
+        self.bstates.insert(0, self.bh)
     
     def __attention(self, s, batch_size):
         """ Conduct local attention algorithm and return the context vector.
