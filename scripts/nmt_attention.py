@@ -3,7 +3,7 @@
 import argparse
 from chainer import cuda, serializers, optimizers
 import chainer.functions as F 
-from nltk.translate.bleu_score import sentence_bleu, corpus_bleu 
+#from nltk.translate.bleu_score import sentence_bleu, corpus_bleu 
 import os
 from lib.backup import Backup
 from lib.vocab import Vocab
@@ -115,10 +115,12 @@ def show(src, tar, hyp, t):
     print 'source: %s'%(' '.join([w for w in src]))
     print 'target: %s'%(' '.join([w for w in tar]))
     print 'hyp: %s'%(' '.join([w for w in hyp]))
+    """
     try:
         print 'SENTENCE BLEU: %s'%(sentence_bleu([tar], hyp))
     except ZeroDivisionError:
         print 'SENTENCE BLEU: 0.0'
+    """
     print '--------------'
 
 def fwrite(src, tar, hyp, fp):
@@ -126,10 +128,12 @@ def fwrite(src, tar, hyp, fp):
     fp.write('source: %s\n'%(' '.join([w for w in src])))
     fp.write('target: %s\n'%(' '.join([w for w in tar])))
     fp.write('hyp: %s\n'%(' '.join([w for w in hyp])))
+    """
     try:
         fp.write('SENTENCE BLEU: %s\n'%(sentence_bleu([tar], hyp)))
     except ZeroDivisionError:
         fp.write('SENTENCE BLEU: 0.0\n')
+    """
     fp.write('--------------\n')
 
 def closed_test(src_batch, tar_batch, hyp_batch):
@@ -145,8 +149,8 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
     batch_gen = batch(sort(src_gen, tar_gen, 100*args.minibatch), args.minibatch)
     total_loss = 0.0
     for src_batch, tar_batch in batch_gen:
-        src_batch= fill_batch(src_batch)
-        tar_batch = fill_batch(tar_batch)
+        src_batch= fill_batch_end(src_batch)
+        tar_batch = fill_batch_end(tar_batch)
         hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
         total_loss += loss.data
         for i, hyp in enumerate(hyp_batch):
@@ -171,8 +175,8 @@ def test(args):
         target_gen = word_list(args.target)
         batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch) 
         for source_batch, target_batch in batch_gen: 
-            source_batch = fill_batch(source_batch)
-            target_batch = fill_batch(target_batch) 
+            source_batch = fill_batch_end(source_batch)
+            target_batch = fill_batch_end(target_batch) 
             hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
             for i, hyp in enumerate(hyp_batch):
                 hyp = hyp[:hyp.index(END)]

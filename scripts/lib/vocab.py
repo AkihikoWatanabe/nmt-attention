@@ -20,13 +20,11 @@ class Vocab():
                     for word in words:
                         word_freq[word] += 1
             # 0:<unk>  1:<s>  2:</s> 3:<pad>
-            self.__s2i = defaultdict(lambda: len(self.__s2i)+4)
-            [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[:self.__vocab_size]]
-            self.__s2i[UNK]= 0
-            self.__s2i[BEGIN] = 1
-            self.__s2i[END] = 2
-            self.__s2i[PAD] = 3
-            self.__i2s = ['']*self.__vocab_size
+            self.__s2i = defaultdict(lambda: len(self.__s2i))
+            for s in [UNK, BEGIN, END, PAD]:
+                self.__s2i[UNK]
+            [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[:self.__vocab_size-4]]
+            self.__i2s = ['']*(self.__vocab_size)
             self.__i2s[0] = UNK
             self.__i2s[1] = BEGIN
             self.__i2s[2] = END
@@ -81,13 +79,13 @@ class Vocab():
         return self.__num_words
 
     def s2i(self, surface):
-        try:
+        if self.__s2i.has_key(surface):
             return self.__s2i[surface]
-        except KeyError:
-            return self.__s2i[UNK] # 0
+        else:
+            return self.__s2i[UNK]
         
     def i2s(self, word_id):
         try:
             return self.__i2s[word_id]
-        except KeyError:
+        except IndexError:
             return self.__i2s[0] # <unk>
