@@ -1,0 +1,1 @@
+python nmt_attention.py ../data/sample_data/tok/train.en ../data/sample_data/tok/train.ja ./model/ --train --validation --use_gpu -embed_size 100 -hidden_size 200 -maxout_hidden_size 100 -vocab 1000 -limit 100

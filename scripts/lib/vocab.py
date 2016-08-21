@@ -26,7 +26,7 @@ class Vocab():
             self.__s2i[BEGIN] = 1
             self.__s2i[END] = 2
             self.__s2i[PAD] = 3
-            self.__i2s = ['']*self.__vocab_size
+            self.__i2s = ['']*(self.__vocab_size+4)
             self.__i2s[0] = UNK
             self.__i2s[1] = BEGIN
             self.__i2s[2] = END
