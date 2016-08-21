@@ -9,7 +9,7 @@ from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
-from lib.constants import BEGIN, END, SENT_PER_BATCH, DECAY_COEFF, PLOT_DIR
+from lib.constants import BEGIN, END, DECAY_COEFF, PLOT_DIR
 from lib.functions import fill_batch_end
 from lib.XP import XP
 
@@ -78,7 +78,7 @@ def train(args):
         print "--- epoch: %s/%s ---"%(epoch+1, args.epochs)
         source_gen = word_list(args.source)
         target_gen = word_list(args.target)
-        batch_gen = batch(sort(source_gen, target_gen, SENT_PER_BATCH), SENT_PER_BATCH)
+        batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch)
         opt = optimizers.AdaDelta(args.rho, args.eps)
         opt.setup(att_encdec)
         n = 0
@@ -146,7 +146,7 @@ def closed_test(src_batch, tar_batch, hyp_batch):
 def validation_test(args, encdec, src_vocab, tar_vocab):
     src_gen = word_list(args.source_validation)
     tar_gen = word_list(args.target_validation)
-    batch_gen = batch(sort(src_gen, tar_gen, SENT_PER_BATCH), args.minibatch)
+    batch_gen = batch(sort(src_gen, tar_gen, 100*args.minibatch), args.minibatch)
     total_loss = 0.0
     for src_batch, tar_batch in batch_gen:
         src_batch= fill_batch(src_batch)
@@ -173,7 +173,7 @@ def test(args):
     with open(args.output+str(args.epochs), 'w') as fp:
         source_gen = word_list(args.source)
         target_gen = word_list(args.target)
-        batch_gen = batch(sort(source_gen, target_gen, SENT_PER_BATCH), args.minibatch) 
+        batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch) 
         for source_batch, target_batch in batch_gen: 
             source_batch = fill_batch(source_batch)
             target_batch = fill_batch(target_batch) 
@@ -187,7 +187,7 @@ def parse_args():
     # each default parameter is according to the settings of original paper.
     DEF_EPOCHS = 10
     DEF_EMBED = 620
-    DEF_MINIBATCH = 20
+    DEF_MINIBATCH = 80
     DEF_HIDDEN = 1000
     DEF_MAXOUT_HIDDEN = 500
     DEF_VOCAB = 30000
