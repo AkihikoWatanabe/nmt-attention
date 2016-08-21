@@ -149,8 +149,8 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
     batch_gen = batch(sort(src_gen, tar_gen, 100*args.minibatch), args.minibatch)
     total_loss = 0.0
     for src_batch, tar_batch in batch_gen:
-        src_batch= fill_batch(src_batch)
-        tar_batch = fill_batch(tar_batch)
+        src_batch= fill_batch_end(src_batch)
+        tar_batch = fill_batch_end(tar_batch)
         hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
         total_loss += loss.data
         for i, hyp in enumerate(hyp_batch):
@@ -175,8 +175,8 @@ def test(args):
         target_gen = word_list(args.target)
         batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch) 
         for source_batch, target_batch in batch_gen: 
-            source_batch = fill_batch(source_batch)
-            target_batch = fill_batch(target_batch) 
+            source_batch = fill_batch_end(source_batch)
+            target_batch = fill_batch_end(target_batch) 
             hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
             for i, hyp in enumerate(hyp_batch):
                 hyp = hyp[:hyp.index(END)]
