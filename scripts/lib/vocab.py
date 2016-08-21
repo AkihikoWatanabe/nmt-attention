@@ -21,7 +21,7 @@ class Vocab():
                         word_freq[word] += 1
             # 0:<unk>  1:<s>  2:</s> 3:<pad>
             self.__s2i = defaultdict(lambda: len(self.__s2i)+4)
-            [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[self.__vocab_size]]
+            [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[:self.__vocab_size]]
             self.__s2i[UNK]= 0
             self.__s2i[BEGIN] = 1
             self.__s2i[END] = 2

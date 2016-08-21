@@ -66,8 +66,8 @@ class Decoder(Chain):
             ch = L.Linear(2*hidden_size, 4*hidden_size),
             hh = L.Linear(hidden_size, 4*hidden_size),
             # single maxout hidden layer
-            sm = L.Linear(hidden_size, 2*maxout_hidden_size),
-            em = L.Linear(embed_size, pool_size**maxout_hidden_size),
+            sm = L.Linear(hidden_size, pool_size*maxout_hidden_size),
+            em = L.Linear(embed_size, pool_size*maxout_hidden_size),
             cm = L.Linear(2*hidden_size, pool_size*maxout_hidden_size),
             my = L.Linear(maxout_hidden_size, vocab_size),
         )
@@ -85,7 +85,7 @@ class Decoder(Chain):
                 h: Updated LSTM hidden state
         """ 
         e = self.ye(y)
-        t = F.maxout(self.sm(h)+self.em(y)+self.cm(cv), self.POOL_SIZE)
+        t = F.maxout(self.sm(h)+self.em(e)+self.cm(cv), self.POOL_SIZE)
         y = self.my(t)
         c, h = F.lstm(c, self.eh(e)+self.hh(h)+self.ch(cv))
 
@@ -135,7 +135,6 @@ class AttentionBasedEncoderDecoder(Chain):
         self.dh = XP.zeros((batch_size, self.hidden_size))   
         self.fstates = []
         self.bstates = []
-        self.sentence_length = 0
         
     def fencode(self, x):
         """ Conduct forward encoding.
@@ -144,7 +143,6 @@ class AttentionBasedEncoderDecoder(Chain):
         """
         e = self.xe(x)
         self.fc, self.fh = self.fenc(e, self.fc, self.fh)
-        self.sentence_length += 1
         self.fstates.append(self.fh)
 
     def bencode(self, x):
@@ -154,7 +152,6 @@ class AttentionBasedEncoderDecoder(Chain):
         """
         e = self.xe(x)
         self.bc, self.bh = self.benc(e, self.bc, self.bh)
-        self.sentence_length += 1
         self.bstates.insert(0, self.bh)
     
     def __attention(self, s, batch_size):
@@ -166,14 +163,17 @@ class AttentionBasedEncoderDecoder(Chain):
                 cv: context vector
         """
         e_list = []
+        sum_e = XP.zeros((batch_size, 1))
         for f, b in zip(self.fstates, self.bstates):
-            h = F.concat(f, b)
-            e_list.append(self.align(s, h))
+            h = F.concat((f, b), axis=1)
+            e = self.align(s, h)
+            e_list.append(e)
+            sum_e += e
         cv = XP.zeros((batch_size, 2*self.hidden_size))
-        sum_e = sum(e_list)
         for f, b, e in zip(self.fstates, self.bstates, e_list):
+            #print e.data
             alpha = e / sum_e
-            cv += alpha * F.concat(f, b)
+            cv += F.reshape(F.batch_matmul(F.concat((f, b), axis=1), alpha), (batch_size, 2*self.hidden_size))
         return cv
 
     def init_decode(self):

@@ -3,12 +3,14 @@
 import argparse
 from chainer import cuda, serializers, optimizers
 import chainer.functions as F 
+from nltk.translate.bleu_score import sentence_bleu, corpus_bleu 
+import os
 from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
-from lib.constants import BEGIN, END
-from lib.functions import fill_batch
+from lib.constants import BEGIN, END, SENT_PER_BATCH, DECAY_COEFF, PLOT_DIR
+from lib.functions import fill_batch_end
 from lib.XP import XP
 
 HPARAM_NAME = "hyper_params"
@@ -27,12 +29,8 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit)
     for l in range(src_len):
         x = XP.iarray([src_vocab.s2i(src_batch[k][l]) for k in range(batch_size)]) 
         encdec.fencode(x)
-    x = XP.iarray([src_vocab.s2i(END) for _ in range(batch_size)])
-    encdec.fencode(x) 
 
     # backward encoding
-    x = XP.iarray([src_vocab.s2i(END) for _ in range(batch_size)])
-    encdec.bencode(x)
     for l in reversed(range(src_len)):
         x = XP.iarray([src_vocab.s2i(src_batch[k][l]) for k in range(batch_size)]) 
         encdec.bencode(x)
@@ -72,29 +70,91 @@ def train(args):
     att_encdec = ABED(args.vocab, args.hidden_size, args.maxout_hidden_size, args.embed_size)
     if args.use_gpu:
         att_encdec.to_gpu()
+    if args.validation:
+        if os.path.exists(PLOT_DIR)==False: os.mkdir(PLOT_DIR)
+        fp_loss = open(PLOT_DIR+"loss", "w")
+        fp_loss_val = open(PLOT_DIR+"loss_val", "w")
     for epoch in xrange(args.epochs):
         print "--- epoch: %s/%s ---"%(epoch+1, args.epochs)
         source_gen = word_list(args.source)
         target_gen = word_list(args.target)
-        batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch)
+        batch_gen = batch(sort(source_gen, target_gen, SENT_PER_BATCH), SENT_PER_BATCH)
         opt = optimizers.AdaDelta(args.rho, args.eps)
         opt.setup(att_encdec)
         n = 0
+        total_loss = 0.0
         for source_batch, target_batch in batch_gen:
             n += len(source_batch)
-            source_batch = fill_batch(source_batch)
-            target_batch = fill_batch(target_batch)
+            source_batch = fill_batch_end(source_batch)
+            target_batch = fill_batch_end(target_batch)
             hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0)
+            total_loss += loss.data
+            closed_test(source_batch, target_batch, hyp_batch)
 
             loss.backward()
-            opt.weight_decay(0.001)
+            opt.weight_decay(DECAY_COEFF)
             opt.update()
+            print "[n=%s]"%(n)
+        print "[total=%s]"%(n)
         prefix = args.model_path + '%s'%(epoch+1)
         serializers.save_hdf5(prefix+'.attencdec', att_encdec)
+        if args.validation:
+            total_loss_val = validation_test(args, att_encdec, source_vocab, target_vocab)
+            fp_loss.write("\t".join([str(epoch), str(total_loss/n)+"\n"]))
+            fp_loss_val.write("\t".join([str(epoch), str(total_loss_val/n)+"\n"])) 
     hyp_params = att_encdec.get_hyper_params()
     Backup.dump(hyp_params, args.model_path+HPARAM_NAME)
     source_vocab.save(args.model_path+SRC_VOCAB_NAME)
     target_vocab.save(args.model_path+TAR_VOCAB_NAME)
+    if args.validation:
+        fp_loss.close()
+        fp_loss_val.close()
+
+def show(src, tar, hyp, t):
+    print '----- %s -----'%(t)
+    print 'source: %s'%(' '.join([w for w in src]))
+    print 'target: %s'%(' '.join([w for w in tar]))
+    print 'hyp: %s'%(' '.join([w for w in hyp]))
+    try:
+        print 'SENTENCE BLEU: %s'%(sentence_bleu([tar], hyp))
+    except ZeroDivisionError:
+        print 'SENTENCE BLEU: 0.0'
+    print '--------------'
+
+def fwrite(src, tar, hyp, fp):
+    fp.write('----------\n')
+    fp.write('source: %s\n'%(' '.join([w for w in src])))
+    fp.write('target: %s\n'%(' '.join([w for w in tar])))
+    fp.write('hyp: %s\n'%(' '.join([w for w in hyp])))
+    try:
+        fp.write('SENTENCE BLEU: %s\n'%(sentence_bleu([tar], hyp)))
+    except ZeroDivisionError:
+        fp.write('SENTENCE BLEU: 0.0\n')
+    fp.write('--------------\n')
+
+def closed_test(src_batch, tar_batch, hyp_batch):
+    for k in range(len(src_batch)):
+        hyp_batch[k].append(END)
+        hyp = hyp_batch[k][:hyp_batch[k].index(END)]
+        tar = tar_batch[k][:tar_batch[k].index(END)]
+        show(src_batch[k], tar, hyp, "CLOSED")
+
+def validation_test(args, encdec, src_vocab, tar_vocab):
+    src_gen = word_list(args.source_validation)
+    tar_gen = word_list(args.target_validation)
+    batch_gen = batch(sort(src_gen, tar_gen, SENT_PER_BATCH), args.minibatch)
+    total_loss = 0.0
+    for src_batch, tar_batch in batch_gen:
+        src_batch= fill_batch(src_batch)
+        tar_batch = fill_batch(tar_batch)
+        hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
+        total_loss += loss.data
+        for i, hyp in enumerate(hyp_batch):
+            hyp.append(END)
+            hyp = hyp[:hyp.index(END)]
+            tar = tar_batch[i][:tar_batch[i].index(END)]
+            show(src_batch[i], tar, hyp, "VALIDATION")
+    return total_loss
 
 def test(args):
     source_vocab = Vocab.load(args.model_path+SRC_VOCAB_NAME)
@@ -109,26 +169,21 @@ def test(args):
     with open(args.output+str(args.epochs), 'w') as fp:
         source_gen = word_list(args.source)
         target_gen = word_list(args.target)
-        batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch) 
+        batch_gen = batch(sort(source_gen, target_gen, SENT_PER_BATCH), args.minibatch) 
         for source_batch, target_batch in batch_gen: 
             source_batch = fill_batch(source_batch)
             target_batch = fill_batch(target_batch) 
             hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
             for i, hyp in enumerate(hyp_batch):
                 hyp = hyp[:hyp.index(END)]
-                print '--------------------'
-                print 'source: %s'%' '.join(source_batch[i])
-                fp.write('source: %s\n'%' '.join(source_batch[i]) )
-                print 'target: %s'%' '.join(target_batch[i])
-                fp.write('target: %s\n'%' '.join(target_batch[i]) ) 
-                print 'hyp: %s'%' '.join(hyp)
-                fp.write('hyp: %s'%' '.join(hyp))
+                show(source_batch[i], target_batch[i], hyp, "TEST")
+                fwrite(source_batch[i], target_batch[i], hyp, fp)
 
 def parse_args():
     # each default parameter is according to the settings of original paper.
     DEF_EPOCHS = 10
     DEF_EMBED = 620
-    DEF_MINIBATCH = 80
+    DEF_MINIBATCH = 20
     DEF_HIDDEN = 1000
     DEF_MAXOUT_HIDDEN = 500
     DEF_VOCAB = 30000
@@ -138,7 +193,7 @@ def parse_args():
     DEF_LIMIT = 50
 
     p = argparse.ArgumentParser(
-        description = "A Neural Attention Model for Machine Translation"
+        description = "A Neural Attention Model for Machine Translation."
             )
     p.add_argument(
             "source",
@@ -165,6 +220,11 @@ def parse_args():
             "--train",
             action="store_true",
             help="if set this option, the network will be trained and generate model files."
+    )
+    p.add_argument(
+            "--validation",
+            action="store_true",
+            help="if set this option, validation test will be conducted in training."
     )
     p.add_argument(
             "--test",

@@ -1,7 +1,5 @@
 from chainer import Variable, cuda
 import numpy as np
-from lib.functions import normalize
-from chainer.functions.array.reshape import reshape
 
 class XP:
     __float = None
@@ -19,15 +17,6 @@ class XP:
     @staticmethod
     def zeros(shape):
         return Variable(XP.__lib.zeros(shape, dtype=XP.__float))
-
-    @staticmethod
-    def ftensor(array, batch_size, height, width):
-        normalized = normalize(XP.__lib.array(array, dtype=XP.__float), XP.__lib)
-        return Variable(normalized.reshape(batch_size, 1, height, width))
-
-    @staticmethod
-    def emtensor(em, batch_size, height, width):
-        return reshape(em, (batch_size, 1, height, width))
 
     @staticmethod
     def iarray(array):
