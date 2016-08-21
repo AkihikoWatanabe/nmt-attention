@@ -70,7 +70,7 @@ def train(args):
     att_encdec = ABED(args.vocab, args.hidden_size, args.maxout_hidden_size, args.embed_size)
     if args.use_gpu:
         att_encdec.to_gpu()
-    if args.validation:
+    if args.source_validation:
         if os.path.exists(PLOT_DIR)==False: os.mkdir(PLOT_DIR)
         fp_loss = open(PLOT_DIR+"loss", "w")
         fp_loss_val = open(PLOT_DIR+"loss_val", "w")
@@ -98,7 +98,7 @@ def train(args):
         print "[total=%s]"%(n)
         prefix = args.model_path + '%s'%(epoch+1)
         serializers.save_hdf5(prefix+'.attencdec', att_encdec)
-        if args.validation:
+        if args.source_validation:
             total_loss_val = validation_test(args, att_encdec, source_vocab, target_vocab)
             fp_loss.write("\t".join([str(epoch), str(total_loss/n)+"\n"]))
             fp_loss_val.write("\t".join([str(epoch), str(total_loss_val/n)+"\n"])) 
@@ -106,7 +106,7 @@ def train(args):
     Backup.dump(hyp_params, args.model_path+HPARAM_NAME)
     source_vocab.save(args.model_path+SRC_VOCAB_NAME)
     target_vocab.save(args.model_path+TAR_VOCAB_NAME)
-    if args.validation:
+    if args.source_validation:
         fp_loss.close()
         fp_loss_val.close()
 
@@ -226,9 +226,14 @@ def parse_args():
             help="if set this option, the network will be trained and generate model files."
     )
     p.add_argument(
-            "--validation",
-            action="store_true",
-            help="if set this option, validation test will be conducted in training."
+            "-source_validation",
+            type=str,
+            help="path_to_validation_source, if set this option, validation test will be conducted in training."
+    )
+    p.add_argument(
+            "-target_validation",
+            type=str,
+            help="path_to_validation_target, if set this option, validation test will be conducted in training."
     )
     p.add_argument(
             "--test",
