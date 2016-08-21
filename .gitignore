@@ -1,0 +1,6 @@
+data/*
+sort.sh
+*.pyc
+scripts/plot/
+scripts/model/
+scripts/run.sh
