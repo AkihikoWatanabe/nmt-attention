@@ -7,5 +7,6 @@ This implementation is based on the https://github.com/odashi/chainer_examples.
 Thank you.
 
 Environment:
+* python 2.7
 * Anaconda
-* Chainer
+* Chainer 1.8.2
