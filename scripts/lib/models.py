@@ -85,9 +85,9 @@ class Decoder(Chain):
                 h: Updated LSTM hidden state
         """ 
         e = self.ye(y)
+        c, h = F.lstm(c, self.eh(e)+self.hh(h)+self.ch(cv))
         t = F.maxout(self.sm(h)+self.em(e)+self.cm(cv), self.POOL_SIZE)
         y = self.my(t)
-        c, h = F.lstm(c, self.eh(e)+self.hh(h)+self.ch(cv))
 
         return y, c, h 
 
@@ -155,7 +155,7 @@ class AttentionBasedEncoderDecoder(Chain):
         self.bstates.insert(0, self.bh)
     
     def __attention(self, s, batch_size):
-        """ Conduct local attention algorithm and return the context vector.
+        """ Conduct global attention algorithm and return the context vector.
             @param:
                 s: state of decoder
                 batch_size: batch size of data
