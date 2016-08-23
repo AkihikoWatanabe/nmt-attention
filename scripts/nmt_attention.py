@@ -9,7 +9,7 @@ from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
-from lib.constants import BEGIN, END, DECAY_COEFF, PLOT_DIR
+from lib.constants import BEGIN, END, DECAY_COEFF, PLOT_DIR, CLIP_THR
 from lib.functions import fill_batch_end
 from lib.XP import XP
 
