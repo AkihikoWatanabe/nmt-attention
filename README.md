@@ -1,9 +1,9 @@
-This is a implementation of the Neural Machine Translation model with Global Attention.
+This is an implementation of the Neural Machine Translation model with Global Attention.
 See the paper: https://arxiv.org/abs/1409.0473
 
-This implementation uses LSTM as gated hidden unit instead of GRU.
+The implementation uses LSTM as gated hidden unit instead of GRU.
 
-This implementation is based on the https://github.com/odashi/chainer_examples.
+This is based on the https://github.com/odashi/chainer_examples.
 Thank you.
 
 Environment:
