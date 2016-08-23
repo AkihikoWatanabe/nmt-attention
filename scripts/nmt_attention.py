@@ -83,6 +83,8 @@ def train(args):
         batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch)
         opt = optimizers.AdaDelta(args.rho, args.eps)
         opt.setup(att_encdec)
+        opt.add_hook(optimizer.WeightDecay(DECAY_COEFF))
+        opt.add_hook(optimizer.GradientClipping(CLIP_THR))
         n = 0
         total_loss = 0.0
         for source_batch, target_batch in batch_gen:
@@ -94,8 +96,6 @@ def train(args):
             closed_test(source_batch, target_batch, hyp_batch)
 
             loss.backward()
-            opt.weight_decay(DECAY_COEFF)
-            opt.clip_grads(CLIP_THR)
             opt.update()
             print "[n=%s]"%(n)
         print "[total=%s]"%(n)
