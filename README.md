@@ -4,7 +4,7 @@ This is an implementation of the Neural Machine Translation model with
 
 	- [Luong et al. 2015] (Simple) Global Attention : http://www.aclweb.org/anthology/D15-1166
 
-        - [Luong et al. 2015] Local Attention : http://www.aclweb.org/anthology/D15-1166
+	- [Luong et al. 2015] Local Attention : http://www.aclweb.org/anthology/D15-1166
 
 The implementation uses LSTM as gated hidden unit instead of GRU to implement [Bahdanau et al. 2015].
 
