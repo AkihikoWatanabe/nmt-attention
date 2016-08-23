@@ -99,9 +99,15 @@ def train(args):
         prefix = args.model_path + '%s'%(epoch+1)
         serializers.save_hdf5(prefix+'.attencdec', att_encdec)
         if args.source_validation:
-            total_loss_val = validation_test(args, att_encdec, source_vocab, target_vocab)
+            total_loss_val, n_val = validation_test(args, att_encdec, source_vocab, target_vocab)
             fp_loss.write("\t".join([str(epoch), str(total_loss/n)+"\n"]))
-            fp_loss_val.write("\t".join([str(epoch), str(total_loss_val/n)+"\n"])) 
+            fp_loss_val.write("\t".join([str(epoch), str(total_loss_val/n_val)+"\n"])) 
+            fp_loss.flush()
+            fp_loss_val.flush()
+        hyp_params = att_encdec.get_hyper_params()
+        Backup.dump(hyp_params, args.model_path+HPARAM_NAME)
+        source_vocab.save(args.model_path+SRC_VOCAB_NAME)
+        target_vocab.save(args.model_path+TAR_VOCAB_NAME)
     hyp_params = att_encdec.get_hyper_params()
     Backup.dump(hyp_params, args.model_path+HPARAM_NAME)
     source_vocab.save(args.model_path+SRC_VOCAB_NAME)
@@ -135,6 +141,7 @@ def fwrite(src, tar, hyp, fp):
         fp.write('SENTENCE BLEU: 0.0\n')
     """
     fp.write('--------------\n')
+    fp.flush()
 
 def closed_test(src_batch, tar_batch, hyp_batch):
     for k in range(len(src_batch)):
@@ -148,7 +155,9 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
     tar_gen = word_list(args.target_validation)
     batch_gen = batch(sort(src_gen, tar_gen, 100*args.minibatch), args.minibatch)
     total_loss = 0.0
+    n = 0
     for src_batch, tar_batch in batch_gen:
+        n += len(src_batch)
         src_batch= fill_batch_end(src_batch)
         tar_batch = fill_batch_end(tar_batch)
         hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
@@ -158,7 +167,7 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
             hyp = hyp[:hyp.index(END)]
             tar = tar_batch[i][:tar_batch[i].index(END)]
             show(src_batch[i], tar, hyp, "VALIDATION")
-    return total_loss
+    return total_loss, n
 
 def test(args):
     source_vocab = Vocab.load(args.model_path+SRC_VOCAB_NAME)
