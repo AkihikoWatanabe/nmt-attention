@@ -1,7 +1,7 @@
 # coding=utf-8
 
 import argparse
-from chainer import cuda, serializers, optimizers
+from chainer import cuda, serializers, optimizer, optimizers
 import chainer.functions as F 
 #from nltk.translate.bleu_score import sentence_bleu, corpus_bleu 
 import os
