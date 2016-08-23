@@ -13,6 +13,8 @@ from lib.constants import BEGIN, END, DECAY_COEFF, PLOT_DIR
 from lib.functions import fill_batch_end
 from lib.XP import XP
 
+os.environ['PATH'] += ':/usr/local/cuda/bin'
+
 HPARAM_NAME = "hyper_params"
 TAR_VOCAB_NAME = "tarvocab"
 SRC_VOCAB_NAME = "srcvocab"
@@ -93,6 +95,7 @@ def train(args):
 
             loss.backward()
             opt.weight_decay(DECAY_COEFF)
+            opt.clip_grads(CLIP_THR)
             opt.update()
             print "[n=%s]"%(n)
         print "[total=%s]"%(n)

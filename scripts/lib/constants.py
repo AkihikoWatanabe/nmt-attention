@@ -12,3 +12,6 @@ DECAY_COEFF = 0.001
 
 # for learning curve
 PLOT_DIR = "./plot/"
+
+# for gradient clipping
+CLIP_THR = 1.0
