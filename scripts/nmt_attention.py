@@ -72,19 +72,25 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit,
             # forward
             best_score = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
             best_edge = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
+            states = []
             active_words = [[] for _ in range(batch_size)]
             BEGIN_IDX = tar_vocab.s2i(BEGIN)
             for i in range(batch_size):
                 best_score[i][0][BEGIN_IDX] = 0.0
                 best_edge[i][0][BEGIN_IDX] = None
                 active_words[i].append([BEGIN_IDX])
+            states.append([encdec.get_decoding_state()])
             for l in range(limit):
                 my_best = [{} for _ in range(batch_size)]
+                if l!=0: assert len(active_words[0][l])==beam, ["active words are corrupted"]
+                _states = []
                 for b in range(len(active_words[0][l])):
                     t = [None for _ in range(batch_size)]
                     for i in range(batch_size):
                         t[i] = active_words[i][l][b]
+                    encdec.set_decoding_state(states[l][b])
                     y = encdec.decode(XP.iarray(t), batch_size)
+                    _states.append(encdec.get_decoding_state())
                     p = F.softmax(y)
                     for i in range(batch_size):
                         if best_score[i][l].has_key(t[i]):
@@ -98,10 +104,12 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit,
                                         best_score[i][l+1][n] = score
                                         best_edge[i][l+1][n] = (l, t[i])
                                         my_best[i][n] = score
+                                        print l+1, n,  score
                                 except KeyError:
                                     best_score[i][l+1][n] = score
                                     best_edge[i][l+1][n] = (l, t[i])
                                     my_best[i][n] = score
+                states.append(_states)
                 for i in range(batch_size):
                     active_words[i].append(map(lambda x:x[0], sorted(my_best[i].items(), key=lambda x:x[1]))[:beam])
             # backward
@@ -259,7 +267,7 @@ def parse_args():
     DEF_RHO = 0.95
     DEF_OUTPUT = "./hyp"
     DEF_LIMIT = 20
-    DEF_BEAM = 3
+    DEF_BEAM = 2
 
     p = argparse.ArgumentParser(
         description = "A Neural Attention Model for Machine Translation."

@@ -184,6 +184,13 @@ class AttentionBasedEncoderDecoder(Chain):
         # see first paragraph on A.2.2 Decoder
         self.dh = F.tanh(self.hs(self.bh))
 
+    def set_decoding_state(self, dc, dh):
+        self.dc = dc
+        self.dh = dh
+
+    def get_decoding_state(self):
+        return self.dc, self.dh
+
     def decode(self, y, batch_size):
         """ Conduct decoding.
             @param:
