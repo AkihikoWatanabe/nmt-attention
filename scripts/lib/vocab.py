@@ -22,7 +22,7 @@ class Vocab():
             # 0:<unk>  1:<s>  2:</s> 3:<pad>
             self.__s2i = defaultdict(lambda: len(self.__s2i))
             for s in [UNK, BEGIN, END, PAD]:
-                self.__s2i[UNK]
+                self.__s2i[s]
             [self.__s2i[k] for k, v in sorted(word_freq.items(), key=lambda x:-x[1])[:self.__vocab_size-4]]
             self.__i2s = ['']*(self.__vocab_size)
             self.__i2s[0] = UNK

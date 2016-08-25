@@ -132,15 +132,16 @@ def train(args):
         if os.path.exists(PLOT_DIR)==False: os.mkdir(PLOT_DIR)
         fp_loss = open(PLOT_DIR+"loss", "w")
         fp_loss_val = open(PLOT_DIR+"loss_val", "w")
+
+    opt = optimizers.AdaDelta(args.rho, args.eps)
+    opt.setup(att_encdec)
+    opt.add_hook(optimizer.WeightDecay(DECAY_COEFF))
+    opt.add_hook(optimizer.GradientClipping(CLIP_THR))
     for epoch in xrange(args.epochs):
         print "--- epoch: %s/%s ---"%(epoch+1, args.epochs)
         source_gen = word_list(args.source)
         target_gen = word_list(args.target)
         batch_gen = batch(sort(source_gen, target_gen, 100*args.minibatch), args.minibatch)
-        opt = optimizers.AdaDelta(args.rho, args.eps)
-        opt.setup(att_encdec)
-        opt.add_hook(optimizer.WeightDecay(DECAY_COEFF))
-        opt.add_hook(optimizer.GradientClipping(CLIP_THR))
         n = 0
         total_loss = 0.0
         for source_batch, target_batch in batch_gen:
@@ -148,7 +149,7 @@ def train(args):
             source_batch = fill_batch_end(source_batch)
             target_batch = fill_batch_end(target_batch)
             hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0, 0)
-            total_loss += loss.data
+            total_loss += loss.data*len(source_batch)
             closed_test(source_batch, target_batch, hyp_batch)
 
             loss.backward()
