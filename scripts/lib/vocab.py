@@ -40,7 +40,7 @@ class Vocab():
                 fp.write('%s	%s\n'%(s, i))
     
     @staticmethod
-    def load(self, filepath):
+    def load(filepath):
         self = Vocab(None, None, make=False)
         with open(filepath) as fp:
             self.__file_path = next(fp).strip()

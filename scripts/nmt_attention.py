@@ -9,7 +9,7 @@ from lib.backup import Backup
 from lib.vocab import Vocab
 from lib.models import AttentionBasedEncoderDecoder as ABED
 from lib.generators import word_list, batch, sort
-from lib.constants import BEGIN, END, DECAY_COEFF, PLOT_DIR, CLIP_THR
+from lib.constants import BEGIN, END, PAD, DECAY_COEFF, PLOT_DIR, CLIP_THR
 from lib.functions import fill_batch_end
 from lib.XP import XP
 
@@ -60,9 +60,10 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit)
         while len(hyp_batch[0])<limit:
             y = encdec.decode(t, batch_size)
             output = cuda.to_cpu(y.data.argmax(1))
+            t = XP.iarray(output)
             for k in range(batch_size):
                 hyp_batch[k].append(tar_vocab.i2s(output[k]))
-            if all(hyp_batch[k][-1]==END for k in xrange(batch_size)):
+            if all(END in hyp_batch[k] for k in xrange(batch_size)):
                 break
         return hyp_batch
 
@@ -191,6 +192,7 @@ def test(args):
             target_batch = fill_batch_end(target_batch) 
             hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
             for i, hyp in enumerate(hyp_batch):
+                hyp.append(END)
                 hyp = hyp[:hyp.index(END)]
                 show(source_batch[i], target_batch[i], hyp, "TEST")
                 fwrite(source_batch[i], target_batch[i], hyp, fp)
