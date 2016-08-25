@@ -12,6 +12,7 @@ from lib.generators import word_list, batch, sort
 from lib.constants import BEGIN, END, PAD, DECAY_COEFF, PLOT_DIR, CLIP_THR
 from lib.functions import fill_batch_end
 from lib.XP import XP
+import math
 
 os.environ['PATH'] += ':/usr/local/cuda/bin'
 
@@ -19,7 +20,7 @@ HPARAM_NAME = "hyper_params"
 TAR_VOCAB_NAME = "tarvocab"
 SRC_VOCAB_NAME = "srcvocab"
 
-def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit):
+def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit, beam):
     batch_size = len(src_batch)
     src_len = len(src_batch[0])
     tar_len = len(tar_batch[0]) if tar_batch!=None else 0
@@ -57,14 +58,60 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit)
                 hyp_batch[k].append(tar_vocab.i2s(output[k]))
         return hyp_batch, loss
     else:
-        while len(hyp_batch[0])<limit:
-            y = encdec.decode(t, batch_size)
-            output = cuda.to_cpu(y.data.argmax(1))
-            t = XP.iarray(output)
-            for k in range(batch_size):
-                hyp_batch[k].append(tar_vocab.i2s(output[k]))
-            if all(END in hyp_batch[k] for k in xrange(batch_size)):
-                break
+        if beam==-1:
+            while len(hyp_batch[0])<limit:
+                y = encdec.decode(t, batch_size)
+                output = cuda.to_cpu(y.data.argmax(1))
+                t = XP.iarray(output)
+                for k in range(batch_size):
+                    hyp_batch[k].append(tar_vocab.i2s(output[k]))
+                if all(END in hyp_batch[k] for k in xrange(batch_size)):
+                    break
+        else:   
+            # beam search
+            # forward
+            best_score = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
+            best_edge = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
+            active_words = [[] for _ in range(batch_size)]
+            BEGIN_IDX = tar_vocab.s2i(BEGIN)
+            for i in range(batch_size):
+                best_score[i][0][BEGIN_IDX] = 0.0
+                best_edge[i][0][BEGIN_IDX] = None
+                active_words[i].append([BEGIN_IDX])
+            for l in range(limit):
+                my_best = [{} for _ in range(batch_size)]
+                for b in range(len(active_words[0][l])):
+                    t = [None for _ in range(batch_size)]
+                    for i in range(batch_size):
+                        t[i] = active_words[i][l][b]
+                    y = encdec.decode(XP.iarray(t), batch_size)
+                    p = F.softmax(y)
+                    for i in range(batch_size):
+                        if best_score[i][l].has_key(t[i]):
+                            for n in range(encdec.vocab_size):
+                                try:
+                                    score = best_score[i][l][t[i]] - math.log(p.data[i][n])
+                                except ValueError:
+                                    score = float('inf')
+                                try:
+                                    if best_score[i][l+1][n]>score:
+                                        best_score[i][l+1][n] = score
+                                        best_edge[i][l+1][n] = (l, t[i])
+                                        my_best[i][n] = score
+                                except KeyError:
+                                    best_score[i][l+1][n] = score
+                                    best_edge[i][l+1][n] = (l, t[i])
+                                    my_best[i][n] = score
+                for i in range(batch_size):
+                    active_words[i].append(map(lambda x:x[0], sorted(my_best[i].items(), key=lambda x:x[1]))[:beam])
+            # backward
+            hyp_batch = [[] for _ in range(batch_size)]
+            for i in range(batch_size):
+                n, _ = sorted(best_score[i][limit].items(), key=lambda x:x[1])[0]
+                e = best_edge[i][limit][n]
+                while e[0]!=0:
+                    hyp_batch[i].insert(0, tar_vocab.i2s(e[1]))
+                    e = best_edge[i][e[0]][e[1]]
         return hyp_batch
 
 def train(args):
@@ -92,7 +139,7 @@ def train(args):
             n += len(source_batch)
             source_batch = fill_batch_end(source_batch)
             target_batch = fill_batch_end(target_batch)
-            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0)
+            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0, 0)
             total_loss += loss.data
             closed_test(source_batch, target_batch, hyp_batch)
 
@@ -164,7 +211,7 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
         n += len(src_batch)
         src_batch= fill_batch_end(src_batch)
         tar_batch = fill_batch_end(tar_batch)
-        hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
+        hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0, 0)
         total_loss += loss.data
         for i, hyp in enumerate(hyp_batch):
             hyp.append(END)
@@ -190,7 +237,10 @@ def test(args):
         for source_batch, target_batch in batch_gen: 
             source_batch = fill_batch_end(source_batch)
             target_batch = fill_batch_end(target_batch) 
-            hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
+            if args.beam_search:
+                hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit, args.beam_size)
+            else:
+                hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit, -1)
             for i, hyp in enumerate(hyp_batch):
                 hyp.append(END)
                 hyp = hyp[:hyp.index(END)]
@@ -208,7 +258,8 @@ def parse_args():
     DEF_EPS = 1e-06
     DEF_RHO = 0.95
     DEF_OUTPUT = "./hyp"
-    DEF_LIMIT = 50
+    DEF_LIMIT = 20
+    DEF_BEAM = 3
 
     p = argparse.ArgumentParser(
         description = "A Neural Attention Model for Machine Translation."
@@ -258,6 +309,11 @@ def parse_args():
             "--use_gpu",
             action="store_true",
             help="using gpu for calculation"
+            )
+    p.add_argument(
+            "--beam_search",
+            action="store_true",
+            help="conduct beam search in decoding"
             )
     p.add_argument(
             "-epochs",
@@ -312,6 +368,12 @@ def parse_args():
             type=int,
             default=DEF_LIMIT,
             help="maximum number of words of output"
+            )
+    p.add_argument(
+            "-beam_size",
+            type=int,
+            default=DEF_BEAM,
+            help="beam size of beam search"
             )
     args = p.parse_args()
 
