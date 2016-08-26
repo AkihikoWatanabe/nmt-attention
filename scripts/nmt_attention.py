@@ -76,6 +76,7 @@ def forward_beam(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, l
     hyp_batch = []
 
     for k in range(batch_size):
+        print "-------- %s/%s --------"%(k+1, batch_size)
         encdec.reset(1)
         # forward encoding
         x = XP.iarray([src_vocab.s2i(BEGIN)])
@@ -135,7 +136,7 @@ def forward_beam(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, l
             
             if END_IDX in active_words[-1]:
                 complete_hyp.append((l+1, END_IDX))
-                active_words[-1].pop(active_words.index(END_IDX))
+                active_words[-1].pop(active_words[-1].index(END_IDX))
             if len(complete_hyp)==beam:
                 break
         # backward
