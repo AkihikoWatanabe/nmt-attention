@@ -20,7 +20,7 @@ HPARAM_NAME = "hyper_params"
 TAR_VOCAB_NAME = "tarvocab"
 SRC_VOCAB_NAME = "srcvocab"
 
-def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit, beam):
+def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit):
     batch_size = len(src_batch)
     src_len = len(src_batch[0])
     tar_len = len(tar_batch[0]) if tar_batch!=None else 0
@@ -58,69 +58,100 @@ def forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit,
                 hyp_batch[k].append(tar_vocab.i2s(output[k]))
         return hyp_batch, loss
     else:
-        if beam==-1:
-            while len(hyp_batch[0])<limit:
-                y = encdec.decode(t, batch_size)
-                output = cuda.to_cpu(y.data.argmax(1))
-                t = XP.iarray(output)
-                for k in range(batch_size):
-                    hyp_batch[k].append(tar_vocab.i2s(output[k]))
-                if all(END in hyp_batch[k] for k in xrange(batch_size)):
-                    break
-        else:   
-            # beam search
-            # forward
-            best_score = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
-            best_edge = [[{} for _ in range(limit+1)] for _ in range(batch_size)]
-            states = []
-            active_words = [[] for _ in range(batch_size)]
-            BEGIN_IDX = tar_vocab.s2i(BEGIN)
-            for i in range(batch_size):
-                best_score[i][0][BEGIN_IDX] = 0.0
-                best_edge[i][0][BEGIN_IDX] = None
-                active_words[i].append([BEGIN_IDX])
-            states.append([encdec.get_decoding_state()])
-            for l in range(limit):
-                my_best = [{} for _ in range(batch_size)]
-                if l!=0: assert len(active_words[0][l])==beam, ["active words are corrupted"]
-                _states = []
-                for b in range(len(active_words[0][l])):
-                    t = [None for _ in range(batch_size)]
-                    for i in range(batch_size):
-                        t[i] = active_words[i][l][b]
-                    encdec.set_decoding_state(states[l][b])
-                    y = encdec.decode(XP.iarray(t), batch_size)
-                    _states.append(encdec.get_decoding_state())
-                    p = F.softmax(y)
-                    for i in range(batch_size):
-                        if best_score[i][l].has_key(t[i]):
-                            for n in range(encdec.vocab_size):
-                                try:
-                                    score = best_score[i][l][t[i]] - math.log(p.data[i][n])
-                                except ValueError:
-                                    score = float('inf')
-                                try:
-                                    if best_score[i][l+1][n]>score:
-                                        best_score[i][l+1][n] = score
-                                        best_edge[i][l+1][n] = (l, t[i])
-                                        my_best[i][n] = score
-                                        print l+1, n,  score
-                                except KeyError:
-                                    best_score[i][l+1][n] = score
-                                    best_edge[i][l+1][n] = (l, t[i])
-                                    my_best[i][n] = score
-                states.append(_states)
-                for i in range(batch_size):
-                    active_words[i].append(map(lambda x:x[0], sorted(my_best[i].items(), key=lambda x:x[1]))[:beam])
-            # backward
-            hyp_batch = [[] for _ in range(batch_size)]
-            for i in range(batch_size):
-                n, _ = sorted(best_score[i][limit].items(), key=lambda x:x[1])[0]
-                e = best_edge[i][limit][n]
-                while e[0]!=0:
-                    hyp_batch[i].insert(0, tar_vocab.i2s(e[1]))
-                    e = best_edge[i][e[0]][e[1]]
+        while len(hyp_batch[0])<limit:
+            y = encdec.decode(t, batch_size)
+            output = cuda.to_cpu(y.data.argmax(1))
+            t = XP.iarray(output)
+            for k in range(batch_size):
+                hyp_batch[k].append(tar_vocab.i2s(output[k]))
+            if all(END in hyp_batch[k] for k in xrange(batch_size)):
+                break
         return hyp_batch
+
+# TODO: implements batch-level beam search
+def forward_beam(src_batch, tar_batch, src_vocab, tar_vocab, encdec, is_train, limit, beam):
+    batch_size = len(src_batch)
+    src_len = len(src_batch[0])
+    tar_len = len(tar_batch[0]) if tar_batch!=None else 0
+    hyp_batch = []
+
+    for k in range(batch_size):
+        encdec.reset(1)
+        # forward encoding
+        x = XP.iarray([src_vocab.s2i(BEGIN)])
+        encdec.fencode(x)
+        for l in range(src_len):
+            x = XP.iarray([src_vocab.s2i(src_batch[k][l])]) 
+            encdec.fencode(x)
+        # backward encoding
+        for l in reversed(range(src_len)):
+            x = XP.iarray([src_vocab.s2i(src_batch[k][l])]) 
+            encdec.bencode(x)
+        x = XP.iarray([src_vocab.s2i(BEGIN)])
+        encdec.bencode(x)
+        # initialize states of the decoder
+        encdec.init_decode()
+        # decoding
+        t = XP.iarray([tar_vocab.s2i(BEGIN)]) 
+
+        # beam search
+        # forward
+        best_score = [{} for _ in range(limit+1)]
+        best_edge = [{} for _ in range(limit+1)]
+        states = [[] for _ in range(limit+1)]
+        active_words = []
+        BEGIN_IDX = tar_vocab.s2i(BEGIN)
+        END_IDX = tar_vocab.s2i(END)
+        best_score[0][BEGIN_IDX] = 0
+        best_edge[0][BEGIN_IDX] = None
+        states[0].append(encdec.get_decoding_state())
+        active_words.append([BEGIN_IDX])
+        t = XP.iarray([BEGIN_IDX])
+        complete_hyp = []
+        for l in range(limit):
+            my_best = {}
+            for prev in active_words[l]:
+                for s in range(len(states[l])):
+                    encdec.set_decoding_state(states[l][s])
+                    y = encdec.decode(XP.iarray([prev]), 1)
+                    states[l+1].append(encdec.get_decoding_state())
+                    p = F.softmax(y)
+                    for next in range(encdec.vocab_size):
+                        if best_score[l].has_key(prev):
+                            try:
+                                score = best_score[l][prev] - math.log(p.data[0][next])
+                            except ValueError:
+                                score = float('inf')
+                            try:
+                                if best_score[l+1][next]>score:
+                                    best_score[l+1][next] = score
+                                    best_edge[l+1][next] = (l, prev)
+                                    my_best[next] = score
+                            except KeyError:
+                                best_score[l+1][next] = score
+                                best_edge[l+1][next] = (l, prev)
+                                my_best[next] = score
+            active_words.append(map(lambda x:x[0], sorted(my_best.items(), key=lambda x:x[1]))[:beam])
+            
+            if END_IDX in active_words[-1]:
+                complete_hyp.append((l+1, END_IDX))
+                active_words[-1].pop(active_words.index(END_IDX))
+            if len(complete_hyp)==beam:
+                break
+        # backward
+        hyp_scores = []
+        for hyp in complete_hyp:
+            hyp_scores.append((hyp[0], best_score[hyp[0], END_IDX]))
+        l, _ = sorted(hyp_scores, key=lambda x:x[1])[0]
+        e = best_edge[l][END_IDX]
+        hyp = []
+        while e[0]!=0:
+            hyp.insert(0, tar_vocab.i2s(e[1]))
+            e = best_edge[e[0]][e[1]]
+        hyp_batch.append(hyp)
+
+    return hyp_batch
+
 
 def train(args):
     source_vocab = Vocab(args.source, args.vocab)
@@ -148,7 +179,7 @@ def train(args):
             n += len(source_batch)
             source_batch = fill_batch_end(source_batch)
             target_batch = fill_batch_end(target_batch)
-            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0, 0)
+            hyp_batch, loss = forward(source_batch, target_batch, source_vocab, target_vocab, att_encdec, True, 0)
             total_loss += loss.data*len(source_batch)
             closed_test(source_batch, target_batch, hyp_batch)
 
@@ -220,8 +251,8 @@ def validation_test(args, encdec, src_vocab, tar_vocab):
         n += len(src_batch)
         src_batch= fill_batch_end(src_batch)
         tar_batch = fill_batch_end(tar_batch)
-        hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0, 0)
-        total_loss += loss.data
+        hyp_batch, loss = forward(src_batch, tar_batch, src_vocab, tar_vocab, encdec, True, 0)
+        total_loss += loss.data*len(src_batch)
         for i, hyp in enumerate(hyp_batch):
             hyp.append(END)
             hyp = hyp[:hyp.index(END)]
@@ -247,9 +278,9 @@ def test(args):
             source_batch = fill_batch_end(source_batch)
             target_batch = fill_batch_end(target_batch) 
             if args.beam_search:
-                hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit, args.beam_size)
+                hyp_batch = forward_beam(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit, args.beam_size)
             else:
-                hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit, -1)
+                hyp_batch = forward(source_batch, None, source_vocab, target_vocab, att_encdec, False, args.limit)
             for i, hyp in enumerate(hyp_batch):
                 hyp.append(END)
                 hyp = hyp[:hyp.index(END)]
